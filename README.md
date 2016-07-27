@@ -7,8 +7,9 @@ A simple lightweight function loader for Vulkan users having  preference of dyna
 
 # How to use
 This ia a python file named vk_gen.py in the project which could be used by following ways:
+
 '''Bash
-python vk_gen.py ./your_header_path
+python vk_gen.py ./vulkan#your preferred path to store the headers
 '''
 
 
