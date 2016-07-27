@@ -19,5 +19,5 @@ if __name__ == "__main__":
 	#with your preferred path to store the headers
 	vk.save("./vulkan")
 ```
-
+There will be three headers generated in the specified location, which is called `"vk_platform.h"`, `"vulkan.h"` and `"vulkan_loader.h"`
 
