@@ -1,177 +1,180 @@
 import os, sys, shutil
 from xml.dom import minidom
 
+class vulkan_extension:
+	def __init__(self, ext):
+		if ext.hasAttribute("protect"):
+			self.protect = ext.getAttribute("protect")
+		else:
+			self.protect = ""
+		self.command_vec = []
+		for cmd in ext.getElementsByTagName("require")[0].getElementsByTagName("command"):
+			self.command_vec.append(cmd.getAttribute("name"))
+
 class vulkan_loader:
 	def __init__(self, xml):
 		try:
 			self.xml_root = minidom.parse(xml).documentElement
+			self.extension_vec = []
+			self.extension_dict = {}
+			self.ext_command_dict = {}
+			for ext in self.xml_root.getElementsByTagName("extensions")[0].getElementsByTagName("extension"):
+				name = ext.getAttribute("name")
+				self.extension_vec.append(name)
+				obj = vulkan_extension(ext)
+				self.extension_dict[name] = obj
+				for cmd in obj.command_vec:
+					self.ext_command_dict[cmd] = name
+			self.command_dict = []
+			for command in self.xml_root.getElementsByTagName("commands")[0].getElementsByTagName("command"):
+				cmd = command.getElementsByTagName("proto")[0].getElementsByTagName("name")[0].firstChild.data
+				if cmd not in self.ext_command_dict:
+					self.command_dict.append(cmd)
 		except:
 			print("Parse xml spec error.")
 			exit()
 
-	def add_line_vulkan_h(self, line):
-		self.vulkan_h_content += line + "\n"
+	def add_line(self, line):
+		self.vulkan_loader_content += line + "\n"
 
 	def add_comments(self):
-		print("\tadd comments for vulkan.h")
-		self.add_line_vulkan_h("////////////////////////////////////////////////////////////////////////////")
+		print("\tadd comments for vulkan_loader.h")
+		self.add_line("////////////////////////////////////////////////////////////////////////////")
 		for line in self.xml_root.getElementsByTagName("comment")[0].childNodes[0].data.split('\n'):
-			self.add_line_vulkan_h("//  " + line)
-		self.add_line_vulkan_h("////////////////////////////////////////////////////////////////////////////")
-		self.add_line_vulkan_h("")
-
-	def add_type(self, type_element):
-		category = type_element.getAttribute("category")
-		if category == "include":
-			if type_element.getAttribute("name") == "vk_platform":
-				self.add_line_vulkan_h("#define VK_VERSION_1_0 1")
-				self.add_line_vulkan_h(type_element.firstChild.data)
-				self.add_line_vulkan_h("")
-		if category == "define" or category == "basetype" or category == "bitmask" \
-			or category == "handle" or category == "funcpointer":
-			line = ""
-			for i in range(type_element.childNodes.length):
-				node = type_element.childNodes[i]
-				if node.nodeType == 3:
-					line += node.data
-				elif node.nodeType == 1:
-					line += node.firstChild.data
-			self.add_line_vulkan_h(line)
-			self.add_line_vulkan_h("")
-		elif category == "struct":
-			self.add_line_vulkan_h("typedef struct {")
-			for member in type_element.getElementsByTagName("member"):
-				line = "\t"
-				for i in range(member.childNodes.length):
-					node = member.childNodes[i]
-					if node.nodeType == 3:
-						line += node.data
-					elif node.nodeType == 1:
-						line += node.firstChild.data
-				self.add_line_vulkan_h(line + ";")
-
-			self.add_line_vulkan_h("} " + type_element.getAttribute("name") + ";")
-			self.add_line_vulkan_h("")
-
-	def add_types(self):
-		print("\tadd types for vulkan.h")
-		types = self.xml_root.getElementsByTagName("types")[0].getElementsByTagName("type")
-		for i in range(types.length):
-			self.add_type(types[i])
-
-	def add_enums(self):
-		print("\tadd enums for vulkan.h")
-		for enums in self.xml_root.getElementsByTagName("enums"):
-			line = "/* " + enums.getAttribute("name");
-			if enums.hasAttribute("comment"):
-				line += ": " + enums.getAttribute("comment")
-			line += " */"
-			self.add_line_vulkan_h(line)
-			for enum in enums.getElementsByTagName("enum"):
-				if enums.hasAttribute("comment"):
-					self.add_line_vulkan_h("/* " + enums.getAttribute("comment") + " */")
-				self.add_line_vulkan_h("#define " + enum.getAttribute("name") + " " + enum.getAttribute("value"))
-			self.add_line_vulkan_h("")
-
-	def add_param(self, param):
-		line = " * @param "
-		for name in param.getElementsByTagName("name"):
-			line += name.firstChild.data
-			break
-		for name in param.getElementsByTagName("type"):
-			line += " type(" + name.firstChild.data + ")"
-			break
-		if param.hasAttribute("optional"):
-			line += " optional(" + param.getAttribute("optional") + ")"
-		if param.hasAttribute("externsync"):
-			line += " externsync(" + param.getAttribute("externsync") + ")"
-		if param.hasAttribute("externsync"):
-			line += " len(" + param.getAttribute("externsync") + ")"
-		self.add_line_vulkan_h(line)
-		ret = ""
-		for i in range(param.childNodes.length):
-			node = param.childNodes[i]
-			if node.nodeType == 3:
-				ret += node.data
-			elif node.nodeType == 1:
-				ret += node.firstChild.data
-		return ret
+			self.add_line("//  " + line)
+		self.add_line("//  ------------------------------------------------------------------------")
+		self.add_line("//")
+		self.add_line("//  Vulkan loader is generated for dynamically loading function of vulkan on")
+		self.add_line("//  Windows and Linux.")
+		self.add_line("//  This generator is written by Albert D Yang.")
+		self.add_line("//")
+		self.add_line("////////////////////////////////////////////////////////////////////////////")
+		self.add_line("")
 
 	def add_commands(self):
-		print("\tadd commands for vulkan.h")
-		for command in self.xml_root.getElementsByTagName("commands")[0].getElementsByTagName("command"):
-			param_list = ""
-			self.add_line_vulkan_h("/**")
-			self.add_line_vulkan_h(" * Function: " + command.getElementsByTagName("proto")[0].getElementsByTagName("name")[0].firstChild.data)
-			first = True;
-			for param in command.getElementsByTagName("param"):
-				if first:
-					first = False
+		print("\tadd commands for vulkan_loader.h")
+		global_func = "#define VK_LOADER_GLOBAL_FUNC"
+		protected_func = []
+		for cmd in self.command_dict:
+			self.add_line("extern PFN_" + cmd + " _" + cmd + ";")
+			self.add_line("#define " + cmd + " _" + cmd)
+			self.add_line("")
+			global_func += " \\\n\tPFN_" + cmd + " _" + cmd + " = NULL;"
+		for ext in self.extension_vec:
+			obj = self.extension_dict[ext]
+			if len(obj.command_vec):
+				self.add_line("/* " + ext + " */")
+				if obj.protect != "":
+					self.add_line("#ifdef " + obj.protect)
+					self.add_line("")
+				for cmd in obj.command_vec:
+					self.add_line("extern PFN_" + cmd + " _" + cmd + ";")
+					self.add_line("#define " + cmd + " _" + cmd)
+					self.add_line("")
+				if obj.protect != "":
+					self.add_line("#endif ")
+					self.add_line("")
+					_func = "#ifdef " + obj.protect + "\n#define " + obj.protect + "_GLOBAL_FUNC"
+					for cmd in obj.command_vec:
+						_func += " \\\n\tPFN_" + cmd + " _" + cmd + " = NULL;"
+					_func += "\n#else\n#define " + obj.protect + "_GLOBAL_FUNC\n#endif"
+					protected_func.append(_func)
 				else:
-					param_list += ", "
-				param_list += self.add_param(param)
-			line = " * @return type(" + command.getElementsByTagName("proto")[0].getElementsByTagName("type")[0].firstChild.data + ")"
-			if command.hasAttribute("successcodes"):
-				line += " successcodes(" + command.getAttribute("successcodes") + ")"
-			if command.hasAttribute("errorcodes"):
-				line += " errorcodes(" + command.getAttribute("errorcodes") + ")"
-			self.add_line_vulkan_h(line)
-			for validity in command.getElementsByTagName("validity"):
-				for usage in validity.getElementsByTagName("usage"):
-					self.add_line_vulkan_h(" * @useage " + usage.firstChild.data)
-			self.add_line_vulkan_h(" */")
-			self.add_line_vulkan_h("")
+					for cmd in obj.command_vec:
+						global_func += " \\\n\tPFN_" + cmd + " _" + cmd + " = NULL;"
 
-			ret_type = command.getElementsByTagName("proto")[0].getElementsByTagName("type")[0].firstChild.data
-			func_name = command.getElementsByTagName("proto")[0].getElementsByTagName("name")[0].firstChild.data
+		self.add_line(global_func)
+		for func in protected_func:
+			self.add_line("")
+			self.add_line(func)
+		self.add_line("")
+		self.add_line("#if defined(VK_USE_PLATFORM_WIN32_KHR)")
+		self.add_line("#define VK_LOADER_STATIC_MODULE_HANDLE static HMODULE _vkModule = NULL;")
+		self.add_line("#elif defined(VK_USE_PLATFORM_XLIB_KHR)")
+		self.add_line("#define VK_LOADER_STATIC_MODULE_HANDLE static void* _vkModule = NULL;")
+		self.add_line("#else")
+		self.add_line("#define VK_LOADER_STATIC_MODULE_HANDLE static int _vkModule = 0;")
+		self.add_line("#endif")
+		self.add_line("")
+		global_macro = "#define VK_LOADER_GLOBAL \\\n\tVK_LOADER_STATIC_MODULE_HANDLE; \\\n\tVK_LOADER_GLOBAL_FUNC;"
+		for ext in self.extension_vec:
+			obj = self.extension_dict[ext]
+			if obj.protect != "":
+				global_macro += " \\\n\t" + obj.protect + "_GLOBAL_FUNC;"
+		self.add_line(global_macro)
+		self.add_line("")
 
-			self.add_line_vulkan_h("typedef " + ret_type + "(VKAPI_PTR *PFN_" + func_name + ")(" + param_list + ");")
-			self.add_line_vulkan_h("")
-			self.add_line_vulkan_h("#ifndef VK_NO_PROTOTYPES")
-			self.add_line_vulkan_h("VKAPI_ATTR " + ret_type + " VKAPI_CALL " + func_name + "(" + param_list + ");")
-			self.add_line_vulkan_h("#else")
-			self.add_line_vulkan_h("extern PFN_" + func_name + " _" + func_name + ";")
-			self.add_line_vulkan_h("#define " + func_name + " _" + func_name)
-			self.add_line_vulkan_h("#endif")
-			self.add_line_vulkan_h("")
-			self.add_line_vulkan_h("")
+		self.add_line("#if defined(VK_USE_PLATFORM_WIN32_KHR)")
+		self.add_line("#define VK_LOADER_LOAD_MODULE(n) if(!_vkModule) _vkModule = LoadLibraryA(n)")
+		self.add_line("#define VK_LOADER_UNLOAD_MODULE() if(_vkModule) {FreeLibrary(_vkModule);_vkModule = NULL;}")
+		self.add_line("#define VK_LOADER_GET_PROC(proc) GetProcAddress(_vkModule, proc)")
+		self.add_line("#elif defined(VK_USE_PLATFORM_XLIB_KHR)")
+		self.add_line("#define VK_LOADER_LOAD_MODULE(n) if(!_vkModule) _vkModule = dlopen(n, RTLD_LAZY | RTLD_GLOBAL)")
+		self.add_line("#define VK_LOADER_UNLOAD_MODULE() if(_vkModule) {dlclose(_vkModule);_vkModule = NULL;}")
+		self.add_line("#define VK_LOADER_GET_PROC(proc) dlsym(_vkModule, proc)")
+		self.add_line("#else")
+		self.add_line("#define VK_LOADER_LOAD_MODULE(n)")
+		self.add_line("#define VK_LOADER_UNLOAD_MODULE()")
+		self.add_line("#define VK_LOADER_GET_PROC(proc)")
+		self.add_line("#endif")
+		self.add_line("")
+		self.add_line("#define VK_LOADER_HAS_LOADED() (_vkModule != 0)")
+		self.add_line("")
+		
+		load_macro = "#define VK_LOADER_LOAD_ALL(n) \\\n\tVK_LOADER_LOAD_MODULE(n); \\\n\tif(_vkModule) {"
+		unload_macro = "#define VK_LOADER_UNLOAD_ALL() \\\n\tVK_LOADER_UNLOAD_MODULE();"
+		for cmd in self.command_dict:
+			self.add_line("#define VK_LOADER_LOAD_" + cmd + " _" + cmd + " = (PFN_" + cmd + ")VK_LOADER_GET_PROC(\"" + cmd + "\")")
+			load_macro += " \\\n\t\tVK_LOADER_LOAD_" + cmd + ";"
+			unload_macro += " \\\n\t_" + cmd + " = NULL;"
 
-	def add_extensions(self):
-		print("\tadd extensions for vulkan.h")
-		for ext in self.xml_root.getElementsByTagName("extensions")[0].getElementsByTagName("extension"):
-			self.add_line_vulkan_h("/**")
-			self.add_line_vulkan_h(" * " + ext.getAttribute("name"))
-			for func in ext.getElementsByTagName("require")[0].getElementsByTagName("command"):
-				self.add_line_vulkan_h(" * require: " + func.getAttribute("name"))
-			self.add_line_vulkan_h(" */")
-			self.add_line_vulkan_h("#define " + ext.getAttribute("name") + " " + ext.getAttribute("number"))
+		for ext in self.extension_vec:
+			obj = self.extension_dict[ext]
+			if len(obj.command_vec):
+				if obj.protect != "":
+					self.add_line("#ifdef " + obj.protect)
+					for cmd in obj.command_vec:
+						self.add_line("#define VK_LOADER_LOAD_" + cmd + " _" + cmd + " = (PFN_" + cmd + ")VK_LOADER_GET_PROC(\"" + cmd + "\")")
+						self.add_line("#define VK_LOADER_UNLOAD_" + cmd + " _" + cmd + " = NULL")
+					self.add_line("#else")
+					for cmd in obj.command_vec:
+						self.add_line("#define VK_LOADER_LOAD_" + cmd)
+						self.add_line("#define VK_LOADER_UNLOAD_" + cmd)
+						load_macro += " \\\n\t\tVK_LOADER_LOAD_" + cmd + ";"
+						unload_macro += " \\\n\tVK_LOADER_UNLOAD_" + cmd + ";"
+					self.add_line("#endif")
+				else:
+					for cmd in obj.command_vec:
+						self.add_line("#define VK_LOADER_LOAD_" + cmd + " _" + cmd + " = (PFN_" + cmd + ")VK_LOADER_GET_PROC(\"" + cmd + "\")")
+						load_macro += " \\\n\t\tVK_LOADER_LOAD_" + cmd + ";"
+						unload_macro += " \\\n\t_" + cmd + " = NULL;"
 
-			for enum in ext.getElementsByTagName("require")[0].getElementsByTagName("enum"):
-				#self.add_line_vulkan_h("#define " + enum.getAttribute("name") + " " + )
-				print(enum.getAttribute("name"))
 
-	def create_vulkan_h(self):
-		print("generating vulkan.h...")
-		self.vulkan_h_content = ""
-		self.add_line_vulkan_h("#ifndef VULKAN_H_")
-		self.add_line_vulkan_h("#define VULKAN_H_ 1")
-		self.add_line_vulkan_h("")
-		self.add_line_vulkan_h("#ifdef __cplusplus")
-		self.add_line_vulkan_h("extern \"C\" {")
-		self.add_line_vulkan_h("#endif")
-		self.add_line_vulkan_h("")
+		load_macro += " \\\n\t}"
+
+		self.add_line("")
+		self.add_line(load_macro)
+		self.add_line("")
+		self.add_line(unload_macro)
+		self.add_line("")
+
+	def create_vulkan_loader(self):
+		print("generating vulkan_loader.h...")
+		self.vulkan_loader_content = ""
 		self.add_comments()
-		self.add_types()
-		self.add_enums()
+		self.add_line("#ifndef VULKAN_LOADER_H_")
+		self.add_line("#define VULKAN_LOADER_H_ 1")
+		self.add_line("")
+		self.add_line("#include \"vulkan.h\"")
+		self.add_line("")
 		self.add_commands()
-		self.add_extensions()
-		self.add_line_vulkan_h("")
-		self.add_line_vulkan_h("#ifdef __cplusplus")
-		self.add_line_vulkan_h("}")
-		self.add_line_vulkan_h("#endif")
-		self.add_line_vulkan_h("")
-		self.add_line_vulkan_h("#endif")
-		print("vulkan.h has been generated.")
+		self.add_line("#endif")
+
+	def save_vulkan_loader(self, path):
+		print("saving vulkan_loader.h...")
+		vulkan_loader_h = open(path + "/vulkan_loader.h", "w")
+		vulkan_loader_h.write(self.vulkan_loader_content)
+		vulkan_loader_h.close()
 
 	def save(self, path):
 		if path == ".":
@@ -181,16 +184,12 @@ class vulkan_loader:
 		if not os.path.isdir(target_path):
 			print("Making directory: " + target_path + " ...")
 			os.makedirs(target_path)
-		#self.create_vulkan_h()
-		#vulkan_h = open(target_path+'/vulkan.h', 'w')
-		#vulkan_h.write(self.vulkan_h_content)
-		#vulkan_h.close()
-
 		print("copying vk_platform.h to " + target_path)
 		shutil.copyfile("vk_platform.h", target_path + "/vk_platform.h")
 		print("copying vulkan.h to " + target_path)
 		shutil.copyfile("vulkan.h", target_path + "/vulkan.h")
-		#print("vulkan.h has been saved to " + target_path)
+		self.create_vulkan_loader()
+		self.save_vulkan_loader(target_path)
 
 if __name__ == "__main__":
 	vk = vulkan_loader("vk.xml")
