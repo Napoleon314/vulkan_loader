@@ -62,6 +62,9 @@ void VulkanRenderer::Term()
 
 #endif
 ```
+# How it works
+The principle of this python generator is really simple to understand. The vk.xml will be loaded and parsed to get the name of Vulkan commands(function called command in this XML file). Macros will be generated to `vulkan_loader.h`. The `VK_LOADER_GLOBAL` will declare necessary variables such as module handle and Vulkan function pointers with `_` prefix. `VK_LOADER_LOAD_ALL(name)` will load shared library (normally, namew will be `vulkan-1.dll` on Windows or `libvulkan.so` on Linux. If library loaded successfully, Vulkan function pointers will be filled one by one. The function set could be updated with the updating of specification file: `vk.xml`. `VK_LOADER_HAS_LOADED()` will check whether the library has been loaded successfully. Finally, `VK_LOADER_UNLOAD_ALL()` clears pointers to `NULL` and unloads the Vulkan module.
 
-
+# Hope
+It helps for Vulkan developers.
 
