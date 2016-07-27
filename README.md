@@ -39,9 +39,15 @@ There will be three headers generated in the specified location, which is called
 
 VK_LOADER_GLOBAL;//decl of global vars
 
+#if defined(BUILD_PLATFORM_WIN)
+#define LIB_VULKAN "vulkan-1.dll"
+#elif defined(BUILD_PLATFORM_LINUX)
+#define LIB_VULKAN "libvulkan.so"
+#endif
+
 void VulkanRenderer::Init()
 {
-	VK_LOADER_LOAD_ALL(LIB_VULKAN);//do init
+	VK_LOADER_LOAD_ALL(LIB_VULKAN);//do init (param has to be the name of Vulkan lib)
 	if (!VK_LOADER_HAS_LOADED())//vertify success
 	{
 		THROW("Failed to load " LIB_VULKAN ".");
